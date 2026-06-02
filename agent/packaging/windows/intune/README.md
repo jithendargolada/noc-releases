@@ -24,7 +24,7 @@ cd agent\packaging\windows\intune
 The script stages `install.cmd`, `uninstall.cmd`, `upgrade.cmd`,
 `repair.cmd`, `detection.ps1`, and the MSI itself into a temp folder,
 then calls `IntuneWinAppUtil.exe -c <folder> -s install.cmd -o dist\`.
-Output: `agent\packaging\windows\intune\dist\NethraOpsMonitorAgent-<ver>.intunewin`.
+Output: `agent\packaging\windows\intune\dist\NethraOpsAgent-<ver>.intunewin`.
 
 ## 2. Upload to Intune
 

@@ -19,8 +19,8 @@
 # Usage:
 #   ./build-wixl.sh [VERSION]
 # Output:
-#   ./dist/NethraOpsMonitorAgent-<version>.msi
-#   ./dist/NethraOpsMonitorAgent-<version>.msi.sha256
+#   ./dist/NethraOpsAgent-<version>.msi
+#   ./dist/NethraOpsAgent-<version>.msi.sha256
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -76,7 +76,7 @@ src = re.sub(r'<Property\s+Id="ARPPRODUCTICON"[^/]*/>', '', src)
 open(sys.argv[2], 'w').write(src)
 PY
 
-OUT="$DIST/NethraOpsMonitorAgent-$VERSION.msi"
+OUT="$DIST/NethraOpsAgent-$VERSION.msi"
 echo "[nethraops-build] wixl -> $OUT"
 wixl -v -o "$OUT" "$STRIPPED"
 

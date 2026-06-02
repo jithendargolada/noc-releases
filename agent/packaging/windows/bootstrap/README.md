@@ -8,13 +8,13 @@ that do NOT already have Python 3.11+ on PATH.
 
 | artifact | when to use |
 | --- | --- |
-| `NethraOpsMonitorAgent-<v>.msi` (Phase 1B) | Managed hosts where Python 3.11+ is centrally provisioned (e.g. via SCCM, Chef, or already part of the gold image). Smaller download; faster install; Intune / GPO friendly. |
-| `NethraOpsMonitorAgentBootstrap-<v>.exe` (Phase 1D) | Fresh hosts with no Python. Self-contained: downloads the python.org embeddable on demand, lays it down at `C:\Program Files\NethraOpsAgent\python\`, then invokes the MSI with `PYTHON_PATH=` pointing at the embeddable. |
+| `NethraOpsAgent-<v>.msi` (Phase 1B) | Managed hosts where Python 3.11+ is centrally provisioned (e.g. via SCCM, Chef, or already part of the gold image). Smaller download; faster install; Intune / GPO friendly. |
+| `NethraOpsAgentBootstrap-<v>.exe` (Phase 1D) | Fresh hosts with no Python. Self-contained: downloads the python.org embeddable on demand, lays it down at `C:\Program Files\NethraOpsAgent\python\`, then invokes the MSI with `PYTHON_PATH=` pointing at the embeddable. |
 
 The bootstrapper EXE accepts the same operator-supplied properties as
 the MSI:
 
-    NethraOpsMonitorAgentBootstrap-0.2.0.exe /quiet `
+    NethraOpsAgentBootstrap-0.2.0.exe /quiet `
         CLAIM_TOKEN=acmeXXXXXXXX `
         PLATFORM_URL=https://monitor.acme.com `
         DEVICE_GROUP=prod-east `
@@ -26,7 +26,7 @@ the MSI:
 # On a Windows host with WiX 3.11+ or WiX 4.x installed.
 cd agent\packaging\windows\bootstrap
 .\build.ps1 -Version 0.2.0 `
-    -MsiPath ..\msi\dist\NethraOpsMonitorAgent-0.2.0.msi `
+    -MsiPath ..\msi\dist\NethraOpsAgent-0.2.0.msi `
     -PythonZipSha512 <128-hex-chars-from-python.org-checksums>
 ```
 

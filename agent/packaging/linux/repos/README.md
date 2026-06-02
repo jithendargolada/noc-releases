@@ -63,9 +63,9 @@ Under that root:
 | --- | --- |
 | `apt/` | APT repo tree (`pool/`, `dists/stable/`, signed Release+InRelease) |
 | `yum/` | YUM repo tree (`noarch/`, `repodata/`, signed repomd.xml.asc) |
-| `windows/NethraOpsMonitorAgent.msi` | Latest MSI (stable URL across releases) |
-| `windows/NethraOpsMonitorAgentBootstrap.exe` | Latest bootstrapper EXE |
-| `windows/NethraOpsMonitorAgent-<version>.msi` | Versioned MSI |
+| `windows/NethraOpsAgent.msi` | Latest MSI (stable URL across releases) |
+| `windows/NethraOpsAgentBootstrap.exe` | Latest bootstrapper EXE |
+| `windows/NethraOpsAgent-<version>.msi` | Versioned MSI |
 | `keys/nethraops-repo-pubkey.asc` | Repo signing public key |
 | `index.html` | Landing page with copy-paste install snippets |
 

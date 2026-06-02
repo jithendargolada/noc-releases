@@ -4,7 +4,7 @@
 
     Layering:
 
-      msiexec /i NethraOpsMonitorAgent-<version>.msi /qn CLAIM_TOKEN=... PLATFORM_URL=...
+      msiexec /i NethraOpsAgent-<version>.msi /qn CLAIM_TOKEN=... PLATFORM_URL=...
           |
           v
       WiX deferred custom action (InstallNethraOpsAgent)

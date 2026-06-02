@@ -201,7 +201,7 @@ jobs:
           # https://www.python.org/downloads/release/python-3119/
           .\agent\packaging\windows\bootstrap\build.ps1 `
               -Version $version `
-              -MsiPath "agent\packaging\windows\msi\dist\NethraOpsMonitorAgent-$version.msi" `
+              -MsiPath "agent\packaging\windows\msi\dist\NethraOpsAgent-$version.msi" `
               -PythonVersion '3.11.9' `
               -PythonZipUrl 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip' `
               -PythonZipSha512 '24106fc0e2a798c34840222083f2643c95a0e14c1eb8bb5489dfbcc3eb56d631cc0649c406d75eae173e2d03cd1cf88d246e5903abf62d414fab88e94afa176e' `
@@ -294,11 +294,11 @@ jobs:
           cp -v artifacts/windows-bootstrap/*.sha256 "$SITE/windows/" || true
           # Stable, version-agnostic copies (so download links never
           # break across releases).
-          for msi in "$SITE"/windows/NethraOpsMonitorAgent-*.msi; do
-            [ -f "$msi" ] && cp -f "$msi" "$SITE/windows/NethraOpsMonitorAgent.msi"
+          for msi in "$SITE"/windows/NethraOpsAgent-*.msi; do
+            [ -f "$msi" ] && cp -f "$msi" "$SITE/windows/NethraOpsAgent.msi"
           done
-          for exe in "$SITE"/windows/NethraOpsMonitorAgentBootstrap-*.exe; do
-            [ -f "$exe" ] && cp -f "$exe" "$SITE/windows/NethraOpsMonitorAgentBootstrap.exe"
+          for exe in "$SITE"/windows/NethraOpsAgentBootstrap-*.exe; do
+            [ -f "$exe" ] && cp -f "$exe" "$SITE/windows/NethraOpsAgentBootstrap.exe"
           done
 
           # Public signing key

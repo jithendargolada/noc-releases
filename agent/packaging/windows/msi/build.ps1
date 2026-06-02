@@ -9,7 +9,7 @@
     every file under agent/ ends up in INSTALLDIR\src\, then links
     against Product.wxs + CustomActions.wxs.
 
-    The output goes to dist\NethraOpsMonitorAgent-<Version>.msi. SHA-256 of
+    The output goes to dist\NethraOpsAgent-<Version>.msi. SHA-256 of
     the result is printed for verification (the manifest endpoint serves
     this hash to the frontend).
 
@@ -64,7 +64,7 @@ $wix4 = Get-Command wix.exe -ErrorAction SilentlyContinue
 $candle = Get-Command candle.exe -ErrorAction SilentlyContinue
 $light  = Get-Command light.exe -ErrorAction SilentlyContinue
 
-$msiOut = Join-Path $distDir "NethraOpsMonitorAgent-$Version.msi"
+$msiOut = Join-Path $distDir "NethraOpsAgent-$Version.msi"
 
 if ($wix4) {
     Write-Host "[nethraops-build] using wix.exe (WiX 4.x) at $($wix4.Source)"
@@ -79,8 +79,11 @@ if ($wix4) {
     Write-Host "[nethraops-build] using candle.exe + light.exe (WiX 3.x)"
     $obj1 = Join-Path $buildDir 'Product.wixobj'
     $obj2 = Join-Path $buildDir 'CustomActions.wixobj'
-    & candle.exe -nologo -dProductVersion=$Version -out $obj1 (Join-Path $here 'Product.wxs')
-    & candle.exe -nologo -dProductVersion=$Version -out $obj2 (Join-Path $here 'CustomActions.wxs')
+    # Quote the -d argument so pwsh 7 interpolates $Version reliably -
+    # native-arg passing in PS7 can leave bare `=$Var` un-expanded.
+    $pvArg = "-dProductVersion=$Version"
+    & candle.exe -nologo $pvArg -out $obj1 (Join-Path $here 'Product.wxs')
+    & candle.exe -nologo $pvArg -out $obj2 (Join-Path $here 'CustomActions.wxs')
     & light.exe -nologo -ext WixUIExtension -ext WixUtilExtension -out $msiOut $obj1 $obj2
 } else {
     Write-Error 'WiX not found on PATH. Install WiX Toolset 3.11+ or 4.x: https://wixtoolset.org/'

@@ -27,10 +27,10 @@ if "%CLAIM%"=="" goto :usage
 if "%URL%"=="" goto :usage
 
 set "HERE=%~dp0"
-set "MSI=%HERE%..\dist\NethraOpsMonitorAgent.msi"
+set "MSI=%HERE%..\dist\NethraOpsAgent.msi"
 if not exist "%MSI%" (
     REM Fall back to whatever versioned MSI is present in dist\.
-    for /f "delims=" %%F in ('dir /b /od "%HERE%..\dist\NethraOpsMonitorAgent-*.msi" 2^>nul') do set "MSI=%HERE%..\dist\%%F"
+    for /f "delims=" %%F in ('dir /b /od "%HERE%..\dist\NethraOpsAgent-*.msi" 2^>nul') do set "MSI=%HERE%..\dist\%%F"
 )
 
 if not exist "%MSI%" (

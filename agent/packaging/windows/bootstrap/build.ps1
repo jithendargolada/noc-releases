@@ -4,16 +4,16 @@
 
 .DESCRIPTION
     Compiles Bundle.wxs + PythonEmbed.wxs into a WiX Burn `.exe`
-    bootstrapper that wraps the existing Phase 1B NethraOpsMonitorAgent.msi
+    bootstrapper that wraps the existing Phase 1B NethraOpsAgent.msi
     plus the Python 3.11 embeddable distribution.
 
     Prerequisites:
       * WiX Toolset 3.11+ (candle.exe + light.exe) OR WiX 4 (wix.exe).
       * The MSI passed via -MsiPath (defaults to
-        ..\msi\dist\NethraOpsMonitorAgent-<version>.msi or whichever
+        ..\msi\dist\NethraOpsAgent-<version>.msi or whichever
         version matches -Version).
 
-    Output: dist\NethraOpsMonitorAgentBootstrap-<version>.exe + .sha256
+    Output: dist\NethraOpsAgentBootstrap-<version>.exe + .sha256
     sidecar. Optional Authenticode signing via -Sign.
 
 .PARAMETER Version
@@ -21,7 +21,7 @@
 
 .PARAMETER MsiPath
     Absolute or relative path to the MSI to wrap. Defaults to the
-    latest NethraOpsMonitorAgent-<Version>.msi under ..\msi\dist\.
+    latest NethraOpsAgent-<Version>.msi under ..\msi\dist\.
 
 .PARAMETER PythonVersion / PythonZipUrl / PythonZipSha512 / PythonZipSize
     Override the Python embeddable distribution metadata baked into
@@ -75,11 +75,11 @@ if (-not $Version) {
 Write-Host "[nethraops-bootstrap] building $Version"
 
 if (-not $MsiPath) {
-    $candidate = Join-Path $msiDistDir "NethraOpsMonitorAgent-$Version.msi"
+    $candidate = Join-Path $msiDistDir "NethraOpsAgent-$Version.msi"
     if (Test-Path $candidate) {
         $MsiPath = (Resolve-Path $candidate).Path
     } else {
-        $stable = Join-Path $msiDistDir 'NethraOpsMonitorAgent.msi'
+        $stable = Join-Path $msiDistDir 'NethraOpsAgent.msi'
         if (Test-Path $stable) {
             $MsiPath = (Resolve-Path $stable).Path
         } else {
@@ -104,7 +104,7 @@ $wix4 = Get-Command wix.exe -ErrorAction SilentlyContinue
 $candle = Get-Command candle.exe -ErrorAction SilentlyContinue
 $light  = Get-Command light.exe -ErrorAction SilentlyContinue
 
-$exeOut = Join-Path $distDir "NethraOpsMonitorAgentBootstrap-$Version.exe"
+$exeOut = Join-Path $distDir "NethraOpsAgentBootstrap-$Version.exe"
 
 if ($wix4) {
     Write-Host "[nethraops-bootstrap] using wix.exe (WiX 4.x)"

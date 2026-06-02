@@ -4,7 +4,7 @@
 
     Why a bootstrapper exists:
 
-      Phase 1B ships NethraOpsMonitorAgent.msi. The MSI's deferred custom
+      Phase 1B ships NethraOpsAgent.msi. The MSI's deferred custom
       action invokes Install-NethraOpsAgent.ps1 which in turn calls
       `python -m venv` to lay down the agent runtime. That assumes
       Python 3.11+ is already on PATH. On a fresh corporate Windows
@@ -20,7 +20,7 @@
            PLATFORM_URL / DEVICE_GROUP / HOST_LABEL straight through
            so the operator command line is unchanged:
 
-             NethraOpsMonitorAgentBootstrap-<v>.exe /quiet \
+             NethraOpsAgentBootstrap-<v>.exe /quiet \
                  CLAIM_TOKEN=acmeXX PLATFORM_URL=https://monitor.acme.com
 
       The MSI's PYTHON_PATH property defaults to "python" - we override
@@ -47,7 +47,7 @@
         <?define ProductVersion = "0.1.0" ?>
     <?endif ?>
     <?ifndef MsiPath ?>
-        <?define MsiPath = "NethraOpsMonitorAgent.msi" ?>
+        <?define MsiPath = "NethraOpsAgent.msi" ?>
     <?endif ?>
 
     <Bundle Name="NethraOps Agent Bootstrap"
@@ -109,7 +109,7 @@
                    reads PYTHON_PATH at install time - we point it at
                    the embeddable location laid down by step 1.
             -->
-            <MsiPackage Id="NethraOpsMonitorAgentMsi"
+            <MsiPackage Id="NethraOpsAgentMsi"
                         SourceFile="$(var.MsiPath)"
                         Vital="yes"
                         DisplayInternalUI="no"

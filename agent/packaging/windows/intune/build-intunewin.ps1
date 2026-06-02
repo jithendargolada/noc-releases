@@ -15,7 +15,7 @@
     configured in the Intune admin centre, NOT in the .intunewin itself.
 
 .PARAMETER MsiPath
-    Path to the NethraOpsMonitorAgent-<version>.msi to package. Defaults
+    Path to the NethraOpsAgent-<version>.msi to package. Defaults
     to the newest MSI under ..\msi\dist\.
 
 .PARAMETER OutputDir
@@ -29,7 +29,7 @@
 
 .EXAMPLE
     PS> .\build-intunewin.ps1
-    PS> .\build-intunewin.ps1 -MsiPath ..\msi\dist\NethraOpsMonitorAgent-0.1.0.msi
+    PS> .\build-intunewin.ps1 -MsiPath ..\msi\dist\NethraOpsAgent-0.1.0.msi
 #>
 
 [CmdletBinding()]
@@ -46,7 +46,7 @@ Set-StrictMode -Version Latest
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $msiDir = (Resolve-Path (Join-Path $here '..\msi\dist')).Path
 if (-not $MsiPath) {
-    $candidate = Get-ChildItem -Path $msiDir -Filter 'NethraOpsMonitorAgent-*.msi' |
+    $candidate = Get-ChildItem -Path $msiDir -Filter 'NethraOpsAgent-*.msi' |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
     if (-not $candidate) {
@@ -68,7 +68,7 @@ if (-not $tool) {
 $staging = Join-Path $env:TEMP "nethraops-intune-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 try {
-    Copy-Item $MsiPath (Join-Path $staging 'NethraOpsMonitorAgent.msi')
+    Copy-Item $MsiPath (Join-Path $staging 'NethraOpsAgent.msi')
     Copy-Item (Join-Path $here '..\msi\scripts\install.cmd')   $staging
     Copy-Item (Join-Path $here '..\msi\scripts\uninstall.cmd') $staging
     Copy-Item (Join-Path $here '..\msi\scripts\upgrade.cmd')   $staging

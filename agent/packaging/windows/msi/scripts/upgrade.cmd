@@ -23,7 +23,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 set "HERE=%~dp0"
 set "MSI=%~1"
 if "%MSI%"=="" (
-    for /f "delims=" %%F in ('dir /b /od "%HERE%..\dist\NethraOpsMonitorAgent-*.msi" 2^>nul') do set "MSI=%HERE%..\dist\%%F"
+    for /f "delims=" %%F in ('dir /b /od "%HERE%..\dist\NethraOpsAgent-*.msi" 2^>nul') do set "MSI=%HERE%..\dist\%%F"
 )
 
 if "%MSI%"=="" (
