@@ -87,7 +87,10 @@ if ($wix4) {
     # not enough; CNDL0200 fires at compile time.
     & candle.exe -nologo $pvArg -ext WixUtilExtension -ext WixUIExtension -out $obj1 (Join-Path $here 'Product.wxs')
     & candle.exe -nologo $pvArg -ext WixUtilExtension -ext WixUIExtension -out $obj2 (Join-Path $here 'CustomActions.wxs')
-    & light.exe -nologo -ext WixUIExtension -ext WixUtilExtension -out $msiOut $obj1 $obj2
+    # -b adds a binder path so light.exe can find License.rtf (the
+    # WixUILicenseRtf value is resolved relative to binder paths, not
+    # the wxs file location, and CWD is the repo root not msi/).
+    & light.exe -nologo -ext WixUIExtension -ext WixUtilExtension -b $here -out $msiOut $obj1 $obj2
 } else {
     Write-Error 'WiX not found on PATH. Install WiX Toolset 3.11+ or 4.x: https://wixtoolset.org/'
     exit 1
