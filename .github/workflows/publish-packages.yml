@@ -241,6 +241,7 @@ jobs:
   # -----------------------------------------------------------------
   publish:
     name: Publish to GitHub Pages
+    runs-on: ubuntu-latest
     # bootstrap is intentionally excluded from `needs` for v0.1.0 — the
     # WiX 3 Burn `RemotePayload` element cannot sit on a secondary
     # ExePackage payload, so the bootstrapper EXE build is parked as a
