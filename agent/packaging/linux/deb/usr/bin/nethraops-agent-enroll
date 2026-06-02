@@ -1,0 +1,76 @@
+#!/bin/bash
+# nethraops-agent-enroll - one-shot post-install enrolment helper.
+#
+# Usage:
+#   sudo nethraops-agent-enroll --claim <token> --backend <url> \
+#                             [--group <name>] [--label <name>]
+#
+# This is for the case where the operator installed the .deb/.rpm
+# without pre-seeding /etc/nethraops-agent/install.conf, then later
+# wants to enrol the host. It funnels into the same redemption flow
+# the Phase 1A /install/linux.sh endpoint serves, so there is exactly
+# one source of truth for enrolment.
+
+set -euo pipefail
+
+CLAIM=""
+BACKEND=""
+GROUP=""
+LABEL=""
+SERVICE_NAME=nethraops-agent.service
+
+usage() {
+    cat >&2 <<'USAGE'
+Usage: nethraops-agent-enroll --claim <token> --backend <url>
+                            [--group <name>] [--label <name>]
+
+  --claim     One-shot claim token (issued by the platform admin).
+  --backend   Platform base URL (e.g. https://monitor.acme.com).
+  --group     Optional device group slug.
+  --label     Optional host label.
+
+The script downloads and runs the platform-served install bootstrap
+(GET <backend>/install/linux.sh?claim=<token>); on success it restarts
+nethraops-agent.service.
+USAGE
+    exit 2
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --claim) CLAIM="$2"; shift 2 ;;
+        --backend) BACKEND="$2"; shift 2 ;;
+        --group) GROUP="$2"; shift 2 ;;
+        --label) LABEL="$2"; shift 2 ;;
+        -h|--help) usage ;;
+        *) echo "unknown argument: $1" >&2; usage ;;
+    esac
+done
+
+if [ -z "${CLAIM}" ] || [ -z "${BACKEND}" ]; then
+    echo "ERROR: --claim and --backend are both required" >&2
+    usage
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "ERROR: must be run as root (sudo nethraops-agent-enroll ...)" >&2
+    exit 1
+fi
+
+export NETHRAOPS_BACKEND_URL="${BACKEND}"
+if [ -n "${GROUP}" ]; then export NETHRAOPS_DEVICE_GROUP="${GROUP}"; fi
+if [ -n "${LABEL}" ]; then export NETHRAOPS_DEVICE_LABEL="${LABEL}"; fi
+
+echo "==> redeeming claim against ${BACKEND}"
+if curl -fsSL "${BACKEND}/install/linux.sh?claim=${CLAIM}" | bash; then
+    echo "==> enrolment OK; restarting ${SERVICE_NAME}"
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1 || true
+        systemctl restart "${SERVICE_NAME}"
+        systemctl --no-pager status "${SERVICE_NAME}" | head -20 || true
+    fi
+else
+    echo "ERROR: enrolment failed; check journalctl -u ${SERVICE_NAME}" >&2
+    exit 1
+fi

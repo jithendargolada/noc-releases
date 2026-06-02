@@ -1,0 +1,22 @@
+Package: nethraops-agent
+Version: 0.1.0
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.11), python3-venv, python3-pip, systemd, curl, ca-certificates
+Recommends: jq
+Maintainer: NethraOps <engineering@nethraops.com>
+Homepage: https://github.com/jithendargolada/mysysteminfo
+Description: NethraOps host telemetry agent
+ NethraOps agent collects host telemetry (CPU, memory, disk,
+ network, processes, containers, log tail) and pushes it to the
+ NethraOps platform on a 15 second cadence.
+ .
+ This package wraps the existing one-line install flow served at
+ /install/linux.sh, layering it under standard Debian package
+ lifecycle management (apt install / apt upgrade / apt purge,
+ systemctl preset, debconf-style pre-seeded config).
+ .
+ The per-host CLAIM_TOKEN is supplied at install time via
+ /etc/nethraops-agent/install.conf (KEY=VALUE) - nothing
+ tenant-specific is baked into the package.

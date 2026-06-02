@@ -1,0 +1,153 @@
+#!/bin/sh
+# postinst script for nethraops-agent (Phase 1C)
+#
+# Layers on top of the existing one-line install flow served at
+# /install/linux.sh - that script remains the source of truth for the
+# enrolment + venv layout. We just funnel into it.
+#
+# Pre-seeded config (debconf-lite style) lives at
+# /etc/nethraops-agent/install.conf with KEY=VALUE lines. Supported:
+#   CLAIM_TOKEN=...
+#   PLATFORM_URL=https://monitor.example.com
+#   DEVICE_GROUP=prod-east   (optional)
+#   HOST_LABEL=db-east-01    (optional)
+
+set -e
+
+USER_NAME=nethraops-agent
+APP_DIR=/opt/nethraops-agent
+VENV_DIR=${APP_DIR}/venv
+ETC_DIR=/etc/nethraops-agent
+DATA_DIR=/var/lib/nethraops-agent
+LOG_DIR=/var/log/nethraops-agent
+SRC_DIR=/usr/share/nethraops-agent/src
+SERVICE_NAME=nethraops-agent.service
+INSTALL_LOG=${LOG_DIR}/install.log
+
+log() {
+    echo "[nethraops-agent postinst] $*"
+    if [ -d "${LOG_DIR}" ]; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "${INSTALL_LOG}" 2>/dev/null || true
+    fi
+}
+
+case "$1" in
+    configure)
+        # 1. System user.
+        if ! id -u "${USER_NAME}" >/dev/null 2>&1; then
+            log "creating system user ${USER_NAME}"
+            useradd --system --no-create-home --home-dir "${DATA_DIR}" \
+                --shell /usr/sbin/nologin "${USER_NAME}"
+        fi
+
+        # 2. Directories with correct ownership / mode.
+        install -d -m 0755 "${APP_DIR}"
+        install -d -m 0750 -o "${USER_NAME}" -g "${USER_NAME}" "${DATA_DIR}"
+        install -d -m 0750 -o "${USER_NAME}" -g "${USER_NAME}" "${LOG_DIR}"
+        install -d -m 0750 -o root -g "${USER_NAME}" "${ETC_DIR}"
+
+        # 3. Virtualenv. The DEB ships the agent source tree under
+        #    /usr/share/nethraops-agent/src; we pip-install it
+        #    into a private venv so we don't pollute the system Python.
+        if [ ! -d "${VENV_DIR}" ]; then
+            log "creating venv at ${VENV_DIR}"
+            python3 -m venv "${VENV_DIR}"
+        fi
+        log "installing agent runtime into venv"
+        "${VENV_DIR}/bin/pip" install --quiet --upgrade pip wheel || true
+        if [ -d "${SRC_DIR}" ]; then
+            "${VENV_DIR}/bin/pip" install --quiet "${SRC_DIR}" || \
+                log "WARN: pip install of agent source failed; the venv will need manual repair"
+        else
+            log "WARN: source dir ${SRC_DIR} missing; venv left empty"
+        fi
+
+        # 4. agent.env template (only if absent - never clobber operator edits).
+        ENV_FILE="${ETC_DIR}/agent.env"
+        if [ ! -f "${ENV_FILE}" ]; then
+            log "writing ${ENV_FILE} template"
+            cat > "${ENV_FILE}" <<'ENVEOF'
+# NethraOps agent configuration.
+# Edit then: systemctl restart nethraops-agent
+#
+# The one-line installer (/install/linux.sh) overwrites these values
+# on first run when a CLAIM_TOKEN is redeemed. After enrolment the
+# long-lived NETHRAOPS_AGENT_TOKEN ends up in /var/lib/nethraops-agent/state.json
+# and the values below are no longer authoritative for auth.
+
+NETHRAOPS_BACKEND_URL=https://monitor.example.com
+NETHRAOPS_ENROLMENT_TOKEN=
+NETHRAOPS_AGENT_TOKEN=
+NETHRAOPS_DEVICE_TYPE=linux
+NETHRAOPS_COLLECT_INTERVAL_SECONDS=15
+NETHRAOPS_FLUSH_INTERVAL_SECONDS=15
+NETHRAOPS_FLUSH_BATCH_SIZE=200
+NETHRAOPS_MAX_BUFFER_FRAMES=10000
+NETHRAOPS_LOG_LEVEL=INFO
+NETHRAOPS_LOG_FORMAT=json
+ENVEOF
+            chown root:"${USER_NAME}" "${ENV_FILE}"
+            chmod 0640 "${ENV_FILE}"
+        fi
+
+        # 5. Pre-seeded install.conf (Debian debconf-lite pattern).
+        CLAIM_TOKEN=""
+        PLATFORM_URL=""
+        DEVICE_GROUP=""
+        HOST_LABEL=""
+        INSTALL_CONF="${ETC_DIR}/install.conf"
+        if [ -f "${INSTALL_CONF}" ]; then
+            log "reading pre-seeded ${INSTALL_CONF}"
+            # shellcheck disable=SC1090
+            while IFS='=' read -r key value; do
+                case "${key}" in
+                    CLAIM_TOKEN) CLAIM_TOKEN="${value}" ;;
+                    PLATFORM_URL) PLATFORM_URL="${value}" ;;
+                    DEVICE_GROUP) DEVICE_GROUP="${value}" ;;
+                    HOST_LABEL) HOST_LABEL="${value}" ;;
+                esac
+            done < "${INSTALL_CONF}"
+        fi
+
+        # 6. systemd: reload + enable.
+        if [ -d /run/systemd/system ]; then
+            log "systemctl daemon-reload"
+            systemctl daemon-reload || true
+            log "systemctl enable ${SERVICE_NAME}"
+            systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1 || true
+        fi
+
+        # 7. Redeem the claim token via the existing /install/linux.sh
+        #    endpoint when both CLAIM_TOKEN + PLATFORM_URL are pre-seeded.
+        if [ -n "${CLAIM_TOKEN}" ] && [ -n "${PLATFORM_URL}" ]; then
+            log "pre-seeded claim found; redeeming via ${PLATFORM_URL}/install/linux.sh"
+            export NETHRAOPS_BACKEND_URL="${PLATFORM_URL}"
+            export NETHRAOPS_DEVICE_GROUP="${DEVICE_GROUP}"
+            export NETHRAOPS_DEVICE_LABEL="${HOST_LABEL}"
+            if curl -fsSL "${PLATFORM_URL}/install/linux.sh?claim=${CLAIM_TOKEN}" | bash; then
+                log "enrolment redemption succeeded"
+                if [ -d /run/systemd/system ]; then
+                    systemctl restart "${SERVICE_NAME}" || true
+                fi
+            else
+                log "WARN: enrolment redemption FAILED - run nethraops-agent-enroll later"
+            fi
+        else
+            log "no pre-seeded CLAIM_TOKEN+PLATFORM_URL in ${INSTALL_CONF}"
+            log "to enrol this host, either:"
+            log "  (a) run: nethraops-agent-enroll --claim <token> --backend <url>"
+            log "  (b) edit ${INSTALL_CONF} and run: dpkg-reconfigure nethraops-agent"
+            log "The service is enabled but will not start until enrolment is complete."
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

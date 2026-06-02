@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Python 3.11 embeddable payload (Phase 1D bootstrapper).
+
+    The embeddable distribution from python.org is a zip - NOT an MSI,
+    NOT an EXE installer. So we cannot use a `MsiPackage` or
+    `ExePackage` directly with its native install logic. The Burn
+    pattern for "fetch a zip and unpack it" is:
+
+      ExePackage InstallCommand="..."
+        Payload SourceFile="..."   # the zip itself
+        Payload SourceFile="..."   # a helper that calls expand-archive
+
+    We point the helper at PowerShell 5.x which is on every Windows
+    Server 2016+ and Windows 10+ host. The helper just runs
+    Expand-Archive with -Force -DestinationPath.
+
+    Why embeddable (not the regular installer):
+
+      * No PATH mutation, no Start-menu shortcuts, no per-user side
+        effects. We literally just want a python.exe + stdlib in a
+        known directory.
+      * No UAC second-prompt for the python.org installer dialog.
+      * Smaller download (~10 MB vs 30 MB for the full installer).
+      * Predictable layout: python.exe + python311.dll + Lib\* live
+        side by side; the MSI's PYTHON_PATH can reference them with
+        no ambiguity.
+
+    The SHA-256 is pinned to the exact 3.11.9 release; CI bumps the
+    pin when Python publishes a security update. The URL + hash
+    BOTH need updating; mismatches abort the install.
+
+    NOTE: the Python URL + SHA below MUST be updated to a real
+    python.org release before this bootstrapper can be exercised.
+    The values here are placeholders so the WiX file compiles; CI
+    overrides them via -d on the candle / wix command line.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+    <?ifndef PythonVersion ?>
+        <?define PythonVersion = "3.11.9" ?>
+    <?endif ?>
+    <?ifndef PythonZipUrl ?>
+        <?define PythonZipUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip" ?>
+    <?endif ?>
+    <?ifndef PythonZipSha512 ?>
+        <!-- Placeholder SHA-512 - CI must override with -dPythonZipSha512=... -->
+        <?define PythonZipSha512 = "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" ?>
+    <?endif ?>
+    <?ifndef PythonZipSize ?>
+        <?define PythonZipSize = "10485760" ?>
+    <?endif ?>
+
+    <Fragment>
+        <PackageGroup Id="Python311Embeddable">
+
+            <!--
+                The helper command:
+                  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command
+                    "Expand-Archive -Force -LiteralPath python-embed.zip -DestinationPath '%ProgramFiles%\NethraOpsAgent\python'"
+
+                Burn's ExePackage runs this once on install, never on
+                uninstall (Permanent='yes') because the MSI's CA owns
+                the lifecycle of the python\ directory.
+
+                DetectCondition: presence of the variable set by the
+                util:DirectorySearch in Bundle.wxs. Burn re-evaluates
+                this each session - on repair / modify the package is
+                a no-op as long as python.exe still exists.
+            -->
+            <ExePackage Id="Python311EmbedExtract"
+                        Cache="yes"
+                        Compressed="yes"
+                        PerMachine="yes"
+                        Permanent="yes"
+                        Vital="yes"
+                        DetectCondition="NETHRAOPS_PYTHON_INSTALLED"
+                        InstallCommand='-NoProfile -ExecutionPolicy Bypass -Command "&amp; { New-Item -ItemType Directory -Force -Path ''[ProgramFiles64Folder]NethraOpsAgent\python'' | Out-Null; Expand-Archive -Force -LiteralPath ''[WixBundleSourceFolder]python-embed.zip'' -DestinationPath ''[ProgramFiles64Folder]NethraOpsAgent\python''; if (-not (Test-Path ''[ProgramFiles64Folder]NethraOpsAgent\python\python.exe'')) { exit 1 } }"'
+                        SourceFile="powershell.exe">
+
+                <!--
+                    The zip payload. RemotePayload tells Burn to download
+                    on demand rather than embed in the .exe (keeps the
+                    bootstrapper small; the zip lives on python.org's
+                    CDN). For an air-gapped variant, drop the
+                    SourceFile attribute back onto the parent ExePackage
+                    and embed a local copy instead.
+                -->
+                <Payload Name="python-embed.zip"
+                         DownloadUrl="$(var.PythonZipUrl)">
+                    <RemotePayload
+                        Description="Python $(var.PythonVersion) Embeddable Distribution (amd64)"
+                        Hash="$(var.PythonZipSha512)"
+                        ProductName="Python Embeddable"
+                        Size="$(var.PythonZipSize)"
+                        Version="$(var.PythonVersion)" />
+                </Payload>
+            </ExePackage>
+        </PackageGroup>
+    </Fragment>
+</Wix>

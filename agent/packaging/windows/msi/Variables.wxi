@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    NethraOps Agent MSI - shared variables.
+
+    UpgradeCode MUST be stable across every release once published. It is
+    the identity Windows Installer uses to detect that a newer build is
+    an UPGRADE of an existing install (not a side-by-side install). If
+    you ever change this GUID, every existing install in the field will
+    treat the new MSI as an unrelated product and refuse to upgrade in
+    place - they will install in parallel and tools like
+    `Get-WmiObject Win32_Product` will report two entries.
+
+    ProductCode is intentionally regenerated each build via `*` so that
+    Windows Installer treats each version as a distinct product code
+    while sharing the UpgradeCode for the major upgrade rule.
+
+    Manufacturer and ProductName are surfaced in Add/Remove Programs,
+    Intune detection rules, and GPO software inventory - keep them
+    stable for the life of the product.
+-->
+<Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <?define ProductName       = "NethraOps Agent" ?>
+    <?define ProductShortName  = "NethraOpsAgent" ?>
+    <?define Manufacturer      = "NethraOps" ?>
+    <?define UpgradeCode       = "615C305A-EAE6-4DFA-ABC9-6DA856100191" ?>
+
+    <!--
+        Version is overridden at build time via candle.exe -dProductVersion=...
+        but we set a sensible default so the WiX project compiles standalone.
+        Use four-part numeric versions (Windows Installer ignores the fourth
+        part when comparing for upgrade, but it shows up in the UI).
+    -->
+    <?ifndef ProductVersion ?>
+        <?define ProductVersion = "0.1.0" ?>
+    <?endif ?>
+
+    <!--
+        Install paths. Hard-coded for now; if customers ever need to
+        relocate the agent we expose them via MSI properties in a later
+        phase. C:\Program Files\ is the canonical 64-bit application root.
+        C:\ProgramData\ holds the per-machine writable state (agent.env,
+        state.json, buffer.sqlite). Both directory IDs are referenced by
+        the existing Install-NethraOpsAgent.ps1 contract.
+    -->
+    <?define InstallDirName = "NethraOpsAgent" ?>
+    <?define DataDirName    = "NethraOpsAgent" ?>
+</Include>

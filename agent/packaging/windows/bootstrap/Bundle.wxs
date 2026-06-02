@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    NethraOps Agent - WiX Burn bootstrapper (Phase 1D).
+
+    Why a bootstrapper exists:
+
+      Phase 1B ships NethraOpsMonitorAgent.msi. The MSI's deferred custom
+      action invokes Install-NethraOpsAgent.ps1 which in turn calls
+      `python -m venv` to lay down the agent runtime. That assumes
+      Python 3.11+ is already on PATH. On a fresh corporate Windows
+      box that is rarely true.
+
+      This bootstrapper wraps the MSI inside a WiX Burn `.exe` that
+      chains:
+
+        1. Python 3.11 embeddable distribution (downloaded from
+           python.org, verified against a known SHA-256). Unpacked
+           to C:\Program Files\NethraOpsAgent\python\.
+        2. The existing Phase 1B MsiPackage. Forwards CLAIM_TOKEN /
+           PLATFORM_URL / DEVICE_GROUP / HOST_LABEL straight through
+           so the operator command line is unchanged:
+
+             NethraOpsMonitorAgentBootstrap-<v>.exe /quiet \
+                 CLAIM_TOKEN=acmeXX PLATFORM_URL=https://monitor.acme.com
+
+      The MSI's PYTHON_PATH property defaults to "python" - we override
+      it to the bootstrapper-managed path. See PythonEmbed.wxs for the
+      payload + extract sequence.
+
+    What this does NOT do:
+
+      * Authenticode signing - handled by the build script's -Sign
+        switch (and CI's WIN_SIGNING_CERT secret); the cert is not
+        provisioned here.
+      * Custom 6-page UI - WixStdBA + the WiX Standard theme is used.
+        A full custom WPF theme is deferred to Phase 1E if customers
+        ask for it.
+
+    ASCII only. WiX 3.x toolset assumed (the build.ps1 also handles
+    WiX 4 by switching to `wix.exe build`).
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+    <?ifndef ProductVersion ?>
+        <?define ProductVersion = "0.1.0" ?>
+    <?endif ?>
+    <?ifndef MsiPath ?>
+        <?define MsiPath = "NethraOpsMonitorAgent.msi" ?>
+    <?endif ?>
+
+    <Bundle Name="NethraOps Agent Bootstrap"
+            Version="$(var.ProductVersion)"
+            Manufacturer="NethraOps"
+            UpgradeCode="A7E7D1B8-7E0D-4B7A-9E3A-3F1D0F25B7C1"
+            AboutUrl="https://nethraops.com/monitor"
+            HelpUrl="https://nethraops.com/monitor">
+
+        <!--
+            BootstrapperApplication: the WixStdBA "RtfLicense" variant
+            shows a simple welcome / license / install / completion UI.
+            For unattended runs (passed /quiet or /passive) Burn drives
+            the chain headless. The custom HyperlinkLicense variant is
+            available as a drop-in if we ever decide to host the EULA
+            inline.
+        -->
+        <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense">
+            <bal:WixStandardBootstrapperApplication
+                LicenseUrl="https://nethraops.com/legal/eula"
+                LogoFile="NethraOpsIcon.png"
+                ShowVersion="yes"
+                SuppressOptionsUI="yes" />
+        </BootstrapperApplicationRef>
+
+        <!--
+            User-overridable variables. Set via /qn or the Burn variable
+            command-line syntax (FOO=bar pairs are converted to Burn
+            variables; we forward them through to the inner MSI in the
+            Chain below).
+        -->
+        <Variable Name="CLAIM_TOKEN"  bal:Overridable="yes" Value="" />
+        <Variable Name="PLATFORM_URL" bal:Overridable="yes" Value="" />
+        <Variable Name="DEVICE_GROUP" bal:Overridable="yes" Value="" />
+        <Variable Name="HOST_LABEL"   bal:Overridable="yes" Value="" />
+
+        <!--
+            Detect an existing NethraOpsAgent\python install so a re-run
+            of the bootstrapper on the same host does not re-download +
+            re-extract the Python embeddable (Burn's per-package
+            DetectCondition / InstallCondition handle this in the
+            Python chain item).
+        -->
+        <util:DirectorySearch Id="NethraOpsPythonDir"
+                              Path="[ProgramFiles64Folder]NethraOpsAgent\python"
+                              Variable="NETHRAOPS_PYTHON_INSTALLED" />
+
+        <Chain>
+            <!--
+                1. Python 3.11 embeddable distribution. Fragment in
+                   PythonEmbed.wxs defines the payload + the install
+                   command line (powershell extract).
+            -->
+            <PackageGroupRef Id="Python311Embeddable" />
+
+            <!--
+                2. The actual NethraOps MSI. Burn passes our
+                   bundle variables through as MSI properties. The MSI
+                   reads PYTHON_PATH at install time - we point it at
+                   the embeddable location laid down by step 1.
+            -->
+            <MsiPackage Id="NethraOpsMonitorAgentMsi"
+                        SourceFile="$(var.MsiPath)"
+                        Vital="yes"
+                        DisplayInternalUI="no"
+                        Permanent="no"
+                        Compressed="yes">
+                <MsiProperty Name="CLAIM_TOKEN"  Value="[CLAIM_TOKEN]" />
+                <MsiProperty Name="PLATFORM_URL" Value="[PLATFORM_URL]" />
+                <MsiProperty Name="DEVICE_GROUP" Value="[DEVICE_GROUP]" />
+                <MsiProperty Name="HOST_LABEL"   Value="[HOST_LABEL]" />
+                <MsiProperty Name="PYTHON_PATH"
+                             Value="[ProgramFiles64Folder]NethraOpsAgent\python\python.exe" />
+            </MsiPackage>
+        </Chain>
+    </Bundle>
+</Wix>

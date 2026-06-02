@@ -1,0 +1,325 @@
+# NethraOps agent - release publishing workflow (Phase 1D).
+#
+# Trigger: pushing a tag matching agent-v* (e.g. agent-v0.2.0).
+#
+# Jobs:
+#   build-deb        ubuntu-latest        builds + signs the .deb
+#   build-rpm        ubuntu-latest        builds + signs the .rpm in a
+#                                          rockylinux:9 container
+#   build-msi        windows-latest       builds + (optionally) signs MSI
+#   build-bootstrap  windows-latest       builds + (optionally) signs
+#                                          the EXE bootstrapper
+#                                          (depends on build-msi)
+#   publish          ubuntu-latest        assembles + signs the repo
+#                                          metadata, publishes to Pages
+#
+# Required secrets (configured under repo Settings -> Secrets and
+# variables -> Actions):
+#
+#   GPG_PRIVATE_KEY       ascii-armored export of `gpg --export-secret-keys`
+#   GPG_KEY_ID            16-hex-char key id
+#   GPG_PASSPHRASE        passphrase, may be empty for no-protection key
+#   WIN_SIGNING_CERT      base64-encoded PFX (optional - Phase 1E)
+#   WIN_SIGNING_PASSPHRASE  PFX passphrase (optional - Phase 1E)
+#
+# See .github/workflows/README.md for the full secret matrix walkthrough.
+
+name: publish-packages
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Override version (default: read from agent/pyproject.toml)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  PYTHON_DEFAULT: '3.11'
+
+jobs:
+
+  # -----------------------------------------------------------------
+  # build-deb: Debian / Ubuntu package
+  # -----------------------------------------------------------------
+  build-deb:
+    name: Build .deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev fakeroot debsigs gnupg
+
+      - name: Import GPG signing key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          echo "default-key ${{ secrets.GPG_KEY_ID }}" >> ~/.gnupg/gpg.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
+        env:
+          GPG_TTY: ''
+
+      - name: Build + sign .deb
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: bash agent/packaging/linux/deb/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: |
+            agent/packaging/linux/deb/dist/*.deb
+            agent/packaging/linux/deb/dist/*.sha256
+            agent/packaging/linux/deb/dist/VERSION
+
+  # -----------------------------------------------------------------
+  # build-rpm: Rocky / RHEL / Fedora package (built inside a Rocky 9
+  # container so rpm-build is available)
+  # -----------------------------------------------------------------
+  build-rpm:
+    name: Build .rpm
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          dnf install -y rpm-build rpm-sign systemd-rpm-macros \
+                         python3 tar gzip gnupg2
+
+      - name: Import GPG signing key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          echo "default-key ${{ secrets.GPG_KEY_ID }}" >> ~/.gnupg/gpg.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+
+      - name: Build + sign .rpm
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: bash agent/packaging/linux/rpm/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-rpm
+          path: |
+            agent/packaging/linux/rpm/dist/*.rpm
+            agent/packaging/linux/rpm/dist/*.sha256
+            agent/packaging/linux/rpm/dist/VERSION
+
+  # -----------------------------------------------------------------
+  # build-msi: Windows MSI
+  # -----------------------------------------------------------------
+  build-msi:
+    name: Build MSI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install WiX 3.x
+        shell: pwsh
+        run: |
+          choco install wixtoolset -y --no-progress
+          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('agent-v')
+          if (-not $version -or $version -eq "${{ github.ref_name }}") {
+            $version = (Select-String -Path agent/pyproject.toml -Pattern '^version *= *"([^"]+)"').Matches[0].Groups[1].Value
+          }
+          .\agent\packaging\windows\msi\build.ps1 -Version $version
+
+      - name: Sign MSI (optional)
+        if: ${{ env.WIN_SIGNING_CERT != '' }}
+        shell: pwsh
+        env:
+          WIN_SIGNING_CERT: ${{ secrets.WIN_SIGNING_CERT }}
+          WIN_SIGNING_PASSPHRASE: ${{ secrets.WIN_SIGNING_PASSPHRASE }}
+        run: |
+          $pfx = "$env:RUNNER_TEMP\nethraops-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_SIGNING_CERT))
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -AsPlainText $env:WIN_SIGNING_PASSPHRASE -Force) | Out-Null
+          $thumb = (Get-PfxData -FilePath $pfx -Password (ConvertTo-SecureString -AsPlainText $env:WIN_SIGNING_PASSPHRASE -Force)).EndEntityCertificates[0].Thumbprint
+          Get-ChildItem agent/packaging/windows/msi/dist/*.msi | ForEach-Object {
+            signtool.exe sign /sha1 $thumb /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi
+          path: |
+            agent/packaging/windows/msi/dist/*.msi
+            agent/packaging/windows/msi/dist/*.sha256
+            agent/packaging/windows/msi/dist/VERSION
+
+  # -----------------------------------------------------------------
+  # build-bootstrap: Burn EXE wrapping the MSI + Python embeddable
+  # -----------------------------------------------------------------
+  build-bootstrap:
+    name: Build Bootstrapper EXE
+    runs-on: windows-latest
+    needs: build-msi
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install WiX 3.x
+        shell: pwsh
+        run: |
+          choco install wixtoolset -y --no-progress
+          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Pull MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-msi
+          path: agent/packaging/windows/msi/dist
+
+      - name: Build bootstrapper
+        shell: pwsh
+        run: |
+          $version = (Get-Content agent/packaging/windows/msi/dist/VERSION -First 1).Trim()
+          # NOTE: SHA-512 + size of python-3.11.9-embed-amd64.zip must
+          # match python.org. Update these on each Python security
+          # release. Use the values from
+          # https://www.python.org/downloads/release/python-3119/
+          .\agent\packaging\windows\bootstrap\build.ps1 `
+              -Version $version `
+              -MsiPath "agent\packaging\windows\msi\dist\NethraOpsMonitorAgent-$version.msi" `
+              -PythonVersion '3.11.9' `
+              -PythonZipUrl 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip' `
+              -PythonZipSha512 '24106fc0e2a798c34840222083f2643c95a0e14c1eb8bb5489dfbcc3eb56d631cc0649c406d75eae173e2d03cd1cf88d246e5903abf62d414fab88e94afa176e' `
+              -PythonZipSize '11249023'
+
+      - name: Sign bootstrapper EXE (optional)
+        if: ${{ env.WIN_SIGNING_CERT != '' }}
+        shell: pwsh
+        env:
+          WIN_SIGNING_CERT: ${{ secrets.WIN_SIGNING_CERT }}
+          WIN_SIGNING_PASSPHRASE: ${{ secrets.WIN_SIGNING_PASSPHRASE }}
+        run: |
+          $pfx = "$env:RUNNER_TEMP\nethraops-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_SIGNING_CERT))
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -AsPlainText $env:WIN_SIGNING_PASSPHRASE -Force) | Out-Null
+          $thumb = (Get-PfxData -FilePath $pfx -Password (ConvertTo-SecureString -AsPlainText $env:WIN_SIGNING_PASSPHRASE -Force)).EndEntityCertificates[0].Thumbprint
+          Get-ChildItem agent/packaging/windows/bootstrap/dist/*.exe | ForEach-Object {
+            signtool.exe sign /sha1 $thumb /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bootstrap
+          path: |
+            agent/packaging/windows/bootstrap/dist/*.exe
+            agent/packaging/windows/bootstrap/dist/*.sha256
+            agent/packaging/windows/bootstrap/dist/VERSION
+
+  # -----------------------------------------------------------------
+  # publish: gather artifacts, build repo metadata, sign, deploy Pages
+  # -----------------------------------------------------------------
+  publish:
+    name: Publish to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [build-deb, build-rpm, build-msi, build-bootstrap]
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install repo build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils createrepo-c gnupg gettext-base
+
+      - name: Import GPG signing key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          echo "default-key ${{ secrets.GPG_KEY_ID }}" >> ~/.gnupg/gpg.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ github.workspace }}/artifacts
+
+      - name: Stage artifacts into repo trees
+        run: |
+          mkdir -p agent/packaging/linux/deb/dist
+          mkdir -p agent/packaging/linux/rpm/dist
+          cp -v artifacts/linux-deb/* agent/packaging/linux/deb/dist/ || true
+          cp -v artifacts/linux-rpm/* agent/packaging/linux/rpm/dist/ || true
+
+      - name: Rebuild APT + YUM repo metadata
+        run: |
+          bash agent/packaging/linux/repos/apt/build-repo.sh
+          bash agent/packaging/linux/repos/yum/build-repo.sh
+
+      - name: Sign repo metadata
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: bash agent/packaging/signing/sign-repo-metadata.sh agent/packaging/linux/repos
+
+      - name: Assemble _site/ layout
+        run: |
+          SITE="${GITHUB_WORKSPACE}/_site"
+          rm -rf "$SITE"
+          mkdir -p "$SITE/apt" "$SITE/yum" "$SITE/windows" "$SITE/keys"
+
+          # APT tree
+          cp -a agent/packaging/linux/repos/apt/. "$SITE/apt/"
+          # YUM tree
+          cp -a agent/packaging/linux/repos/yum/. "$SITE/yum/"
+          # Windows artifacts
+          cp -v artifacts/windows-msi/*.msi "$SITE/windows/" || true
+          cp -v artifacts/windows-msi/*.sha256 "$SITE/windows/" || true
+          cp -v artifacts/windows-bootstrap/*.exe "$SITE/windows/" || true
+          cp -v artifacts/windows-bootstrap/*.sha256 "$SITE/windows/" || true
+          # Stable, version-agnostic copies (so download links never
+          # break across releases).
+          for msi in "$SITE"/windows/NethraOpsMonitorAgent-*.msi; do
+            [ -f "$msi" ] && cp -f "$msi" "$SITE/windows/NethraOpsMonitorAgent.msi"
+          done
+          for exe in "$SITE"/windows/NethraOpsMonitorAgentBootstrap-*.exe; do
+            [ -f "$exe" ] && cp -f "$exe" "$SITE/windows/NethraOpsMonitorAgentBootstrap.exe"
+          done
+
+          # Public signing key
+          cp -v agent/packaging/signing/nethraops-repo-pubkey.asc "$SITE/keys/"
+
+          # Landing page (templated)
+          VERSION="$(cat artifacts/linux-deb/VERSION 2>/dev/null || echo unknown)"
+          export NETHRAOPS_VERSION="$VERSION"
+          envsubst < agent/packaging/linux/repos/_site/index.html > "$SITE/index.html"
+
+          echo "==> _site contents:"
+          find "$SITE" -maxdepth 3 -type f | sort
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

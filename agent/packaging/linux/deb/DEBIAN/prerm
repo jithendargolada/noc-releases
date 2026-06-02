@@ -1,0 +1,31 @@
+#!/bin/sh
+# prerm script for nethraops-agent.
+# Stop + disable the service before package files are torn down so
+# the daemon does not crash partway through file removal.
+
+set -e
+
+SERVICE_NAME=nethraops-agent.service
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        if [ -d /run/systemd/system ]; then
+            if systemctl is-active --quiet "${SERVICE_NAME}"; then
+                systemctl stop "${SERVICE_NAME}" || true
+            fi
+            if [ "$1" = "remove" ]; then
+                systemctl disable "${SERVICE_NAME}" >/dev/null 2>&1 || true
+            fi
+        fi
+        ;;
+
+    failed-upgrade)
+        ;;
+
+    *)
+        echo "prerm called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

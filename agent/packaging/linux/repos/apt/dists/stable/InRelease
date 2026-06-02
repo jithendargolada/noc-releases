@@ -1,0 +1,43 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Fri, 29 May 2026 07:22:52 +0000
+Description: NethraOps agent APT repository
+Label: NethraOps
+Origin: NethraOps
+Suite: stable
+MD5Sum:
+ 27a8a00febc8944a5ddd83e9f714358b              196 Release
+ 4dfe6709aab1b6818fcd39800fb90829             1334 main/binary-amd64/Packages
+ b3f877e2e77056849c3de97bbad202a5              855 main/binary-amd64/Packages.gz
+SHA1:
+ ee4bc295159790f0f9880e64cde37cb2d63c960b              196 Release
+ ff547b7146ae1ccbdcd21c9eea8dffa78c32d0d8             1334 main/binary-amd64/Packages
+ 6438f4bf58d97df2bd452ea25336d03dee76da7c              855 main/binary-amd64/Packages.gz
+SHA256:
+ 432bd9173271835d6d906b2d529c37d38eb5d7df7fafe5a5ce8b43afa3536b9c              196 Release
+ 175b40e44b24c0f3879584077ccd0f5269efd78ee47874f374dff808b299f049             1334 main/binary-amd64/Packages
+ fd2b6a73e02c1225740271b52d62b19382a719d9384c3e260495a66bf91eda4b              855 main/binary-amd64/Packages.gz
+SHA512:
+ e27f33376fbe3cec8796aef8cb328c7af3639df76e205e8aa192c92a51c6c3669b5a8992c13fdf296cd6fd22bf715e6905094825a4b5c03e123f89944893107a              196 Release
+ ed5c8c2d3aa3f9c4e8ec3555117568b9fa67ffd88828e59e35caebaf86d5ea6e4a27ce733dfb671c20e61c4ff3ba7b099f8401bb707112f6c2f2fea7d36a1608             1334 main/binary-amd64/Packages
+ 046aa113f793eabe6b84b949c63e4c0c6a53970d2345e7723b788307ed1a18a9e4a74b716f8d59dca6580a1ef5d15a24c4fa222ac005f72e5b130a5ab5cb034e              855 main/binary-amd64/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEEZgrMutxOHuFY0RiTsoKm7AfLz9oFAmoZPtMACgkQsoKm7AfL
+z9o1FA//fh/PPXnDml1ccNET6cNmpotcRN2P64RRQ0bph62hatp4VtRGmhMB8JdF
+qw5NaGkGmhqriNWvkgDCI5omSYRFxTjsLhu4/V5hCqF7E3zv54/LEr1V1aFjuJmx
+v6jdG7hOiRQZQh89P54fROMkX16DJD+X7SQgYYcaMbP7tELT6Js7jmRXH1P0mcTb
+6Od9Y8rUg5SxuKtVwA5FhnBpqMkNfmuSlgcULykP1k6LrYk11s7D23XbjK8M4CNP
+ZaiNQl8Uogue/xmYih+JhtRUy42xCeTs3V8QT/ofJigTwk7NxzqSXK7/ZvgXm81l
+RsDalfavhZtfJWtRjg7RWQCu44GqAStAKCwu+koMNDhj52UPMTDpg7Xg83XD9ynE
+gWNrkCp1OVWCy6sU747uqKsU1WeK0LQCtgNpX5bCm6JpkKTrHyaypNhLfC9mkq6s
+S+T8BywOQGBTTFVjQGKCexvS2v9caIbymEcTWMBIEMrxLZwSg/jl5iJvHNajoNOU
+WBv761ylI5w3Z8MXH3nxaWHOf2UsCVsPsKP9I4mwiP9bkr9NYIFTr6DncYQ8vGbB
+tk1J/vOxa1fgptIbxZ9iyjhqnUJ3E3/G38EDav5shkXGDLIKxlPWZiOFl3pOkzOU
+ukMHpIVk47/bHI8x9ElLTALbhc+sF3e46t0fBSZH4AQTT7HLn4k=
+=gC3+
+-----END PGP SIGNATURE-----

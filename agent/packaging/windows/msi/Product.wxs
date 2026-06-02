@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    NethraOps Agent - Windows Installer (MSI) source.
+
+    Layering:
+
+      msiexec /i NethraOpsMonitorAgent-<version>.msi /qn CLAIM_TOKEN=... PLATFORM_URL=...
+          |
+          v
+      WiX deferred custom action (InstallNethraOpsAgent)
+          |
+          v
+      powershell.exe -ExecutionPolicy Bypass -File Install-NethraOpsAgent.ps1
+                     -BackendUrl <PLATFORM_URL> -EnrolmentToken <minted from CLAIM_TOKEN>
+                     -DeviceSlug <HOST_LABEL or COMPUTERNAME>
+          |
+          v
+      Existing Phase 1A agent installer (untouched).
+
+    The MSI's job is staging + service registration + invoking the existing
+    installer. It deliberately does NOT contain any "register with backend"
+    logic of its own - that path is owned by the existing Phase 1A flow.
+
+    ASCII only in this file: PowerShell 5.x mis-decodes em-dashes (0x94)
+    as closing quotes; the same superstition is applied to all MSI source
+    files even though Windows Installer is forgiving, because the same
+    .ps1 templates are emitted from here.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <?include Variables.wxi ?>
+
+    <Product Id="*"
+             Name="$(var.ProductName)"
+             Language="1033"
+             Version="$(var.ProductVersion)"
+             Manufacturer="$(var.Manufacturer)"
+             UpgradeCode="$(var.UpgradeCode)">
+
+        <Package InstallerVersion="500"
+                 Compressed="yes"
+                 InstallScope="perMachine"
+                 Manufacturer="$(var.Manufacturer)"
+                 Description="$(var.ProductName) $(var.ProductVersion)"
+                 Keywords="NethraOps,Monitor,Agent,Telemetry" />
+
+        <!--
+            MajorUpgrade: when a higher version is installed, the older
+            install is removed AFTER the install completes (so the data
+            directory survives). REINSTALLMODE handling for repair flows
+            is left to msiexec /f - we do not override it here.
+        -->
+        <MajorUpgrade Schedule="afterInstallExecute"
+                      DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed. Uninstall it first if you want to downgrade." />
+
+        <MediaTemplate EmbedCab="yes" />
+
+        <!--
+            MSI properties supplied by the operator. All five are read by
+            the deferred custom action below. CLAIM_TOKEN and PLATFORM_URL
+            are the only ones the customer typically supplies; the others
+            have sensible defaults.
+
+            Secure="yes" so the values pass into the deferred (elevated)
+            CA via CustomActionData (Windows Installer hides public
+            properties from deferred CAs by default).
+        -->
+        <Property Id="CLAIM_TOKEN"  Secure="yes" />
+        <Property Id="PLATFORM_URL" Secure="yes" />
+        <Property Id="DEVICE_GROUP" Secure="yes" />
+        <Property Id="HOST_LABEL"   Secure="yes" />
+        <Property Id="PYTHON_PATH"  Secure="yes" Value="python" />
+
+        <!--
+            KEEP_CONFIG: when set to "1" at uninstall time, the
+            C:\ProgramData\NethraOpsAgent directory (agent.env + state.json
+            + buffer.sqlite) is preserved so a subsequent reinstall picks
+            up where it left off. See scripts/uninstall.cmd.
+        -->
+        <Property Id="KEEP_CONFIG" Secure="yes" />
+
+        <!--
+            Directory structure. Two roots:
+              - ProgramFiles64Folder\NethraOpsAgent\  (binaries, venv)
+              - CommonAppDataFolder\NethraOpsAgent\   (writable state + env)
+        -->
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFiles64Folder">
+                <Directory Id="INSTALLDIR" Name="$(var.InstallDirName)">
+                    <Component Id="InstallDirMarker"
+                               Guid="9F1B36F2-6E0E-4F9F-93C2-7E1F2B5E8A11"
+                               Win64="yes">
+                        <CreateFolder />
+                        <!--
+                            A trivial registry value so Windows Installer
+                            has a key path it can reference for repair /
+                            uninstall - directories alone are not valid
+                            component key paths.
+                        -->
+                        <RegistryValue Root="HKLM"
+                                       Key="Software\$(var.Manufacturer)\$(var.ProductShortName)"
+                                       Name="InstallRoot"
+                                       Type="string"
+                                       Value="[INSTALLDIR]"
+                                       KeyPath="yes" />
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <Directory Id="CommonAppDataFolder">
+                <Directory Id="DATADIR" Name="$(var.DataDirName)">
+                    <Component Id="DataDirMarker"
+                               Guid="3A9DCB44-3D14-4B85-8E8B-2A1A40B43F84"
+                               Win64="yes">
+                        <CreateFolder>
+                            <!--
+                                ACL: SYSTEM + BUILTIN\Administrators
+                                full control. The agent runs as
+                                LocalSystem; restricted users must not
+                                read agent.env (it can contain a token
+                                fragment until first registration).
+                            -->
+                            <util:PermissionEx
+                                xmlns:util="http://schemas.microsoft.com/wix/UtilExtension"
+                                User="SYSTEM"
+                                GenericAll="yes" />
+                            <util:PermissionEx
+                                xmlns:util="http://schemas.microsoft.com/wix/UtilExtension"
+                                User="Administrators"
+                                GenericAll="yes" />
+                        </CreateFolder>
+                        <RegistryValue Root="HKLM"
+                                       Key="Software\$(var.Manufacturer)\$(var.ProductShortName)"
+                                       Name="DataRoot"
+                                       Type="string"
+                                       Value="[DATADIR]"
+                                       KeyPath="yes" />
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <Feature Id="MainFeature"
+                 Title="$(var.ProductName)"
+                 Level="1"
+                 ConfigurableDirectory="INSTALLDIR">
+            <ComponentRef Id="InstallDirMarker" />
+            <ComponentRef Id="DataDirMarker" />
+        </Feature>
+
+        <!--
+            Custom actions:
+
+            1. SetInstallAgentData    - immediate, type 51, builds the
+               CustomActionData property for the deferred CA so that
+               it can read the operator-supplied properties.
+            2. InstallAgentDeferred   - deferred, elevated, runs the
+               PowerShell installer with the redeemed token.
+            3. SetUninstallAgentData  - same pattern for the uninstall CA.
+            4. UninstallAgentDeferred - deferred, elevated, removes the
+               Windows service + (optionally) the data directory.
+
+            The actual implementations live in CustomActions.wxs.
+        -->
+        <CustomActionRef Id="SetInstallAgentData" />
+        <CustomActionRef Id="InstallAgentDeferred" />
+        <CustomActionRef Id="SetUninstallAgentData" />
+        <CustomActionRef Id="UninstallAgentDeferred" />
+
+        <InstallExecuteSequence>
+            <Custom Action="SetInstallAgentData" After="InstallFiles">NOT REMOVE</Custom>
+            <Custom Action="InstallAgentDeferred" After="SetInstallAgentData">NOT REMOVE</Custom>
+
+            <Custom Action="SetUninstallAgentData" Before="RemoveFiles">REMOVE="ALL"</Custom>
+            <Custom Action="UninstallAgentDeferred" After="SetUninstallAgentData">REMOVE="ALL"</Custom>
+        </InstallExecuteSequence>
+
+        <!--
+            Minimal UI. The full six-page custom UI (Welcome / EULA /
+            PlatformURL / Token / Group / Install / Completion) is
+            deferred to Phase 1C - WixUI_Minimal is sufficient for
+            silent enterprise rollouts where the operator passes
+            CLAIM_TOKEN and PLATFORM_URL on the msiexec command line.
+        -->
+        <UIRef Id="WixUI_Minimal" />
+        <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+        <Icon Id="NethraOpsIcon.ico" SourceFile="NethraOpsIcon.ico" />
+        <Property Id="ARPPRODUCTICON" Value="NethraOpsIcon.ico" />
+        <Property Id="ARPHELPLINK" Value="https://nethraops.com/monitor" />
+        <Property Id="ARPURLINFOABOUT" Value="https://nethraops.com/monitor" />
+    </Product>
+</Wix>

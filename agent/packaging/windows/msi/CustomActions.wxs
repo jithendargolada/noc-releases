@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    NethraOps Agent - Custom Actions.
+
+    The two deferred CAs (InstallAgentDeferred / UninstallAgentDeferred)
+    run in the system context after files are laid down. Deferred CAs
+    cannot read MSI properties directly - they only see whatever is
+    placed in a property whose ID matches the CA name. So each deferred
+    CA is paired with an immediate "Set..." CA that serialises the
+    operator-supplied properties into a tab-delimited string the
+    deferred CA parses.
+
+    The actual installer logic is the existing Install-NethraOpsAgent.ps1
+    (which is staged into INSTALLDIR\packaging\windows\ by the file
+    harvest in a future build). We invoke it via powershell.exe with
+    ExecutionPolicy Bypass; nothing in the MSI duplicates the
+    registration logic from Phase 1A.
+
+    PowerShell quoting hazards: every value is single-quoted on the
+    command line so embedded spaces in HOST_LABEL or DEVICE_GROUP do not
+    break the parser. ASCII only.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <?include Variables.wxi ?>
+
+    <Fragment>
+        <!-- ============ INSTALL ============ -->
+        <CustomAction Id="SetInstallAgentData"
+                      Property="InstallAgentDeferred"
+                      Value="CLAIM=[CLAIM_TOKEN]|URL=[PLATFORM_URL]|GROUP=[DEVICE_GROUP]|LABEL=[HOST_LABEL]|PY=[PYTHON_PATH]|INSTALLDIR=[INSTALLDIR]|DATADIR=[DATADIR]"
+                      Execute="immediate"
+                      Return="check" />
+
+        <CustomAction Id="InstallAgentDeferred"
+                      BinaryKey="WixCA"
+                      DllEntry="WixQuietExec"
+                      Execute="deferred"
+                      Return="check"
+                      Impersonate="no" />
+
+        <!-- ============ UNINSTALL ============ -->
+        <CustomAction Id="SetUninstallAgentData"
+                      Property="UninstallAgentDeferred"
+                      Value="DATADIR=[DATADIR]|KEEP_CONFIG=[KEEP_CONFIG]|INSTALLDIR=[INSTALLDIR]"
+                      Execute="immediate"
+                      Return="check" />
+
+        <CustomAction Id="UninstallAgentDeferred"
+                      BinaryKey="WixCA"
+                      DllEntry="WixQuietExec"
+                      Execute="deferred"
+                      Return="check"
+                      Impersonate="no" />
+
+        <!--
+            NOTE: the actual PowerShell command line is built by the
+            build script (build.ps1) at compile time and substituted in
+            via a -d preprocessor switch. The simpler form above ships
+            the parameter blob and lets a tiny launcher script in
+            INSTALLDIR\packaging\windows\msi-install.ps1 split it and
+            call Install-NethraOpsAgent.ps1.
+
+            For the Linux build (wixl) this fallback Value form keeps
+            the file valid - wixl will refuse to compile CustomActions
+            referencing the WixCA binary because the WiX utility
+            extension is Windows-only. The build.ps1 / build-wixl.sh
+            scripts swap in the appropriate variant.
+        -->
+    </Fragment>
+</Wix>

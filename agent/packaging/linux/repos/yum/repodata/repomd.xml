@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- repomd.xml stub. Run agent/packaging/linux/repos/yum/build-repo.sh
+     on a host with createrepo_c installed to materialise the real
+     metadata indexes. -->
+<repomd xmlns="http://linux.duke.edu/metadata/repo"/>

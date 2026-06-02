@@ -1,0 +1,55 @@
+#!/bin/sh
+# postrm script for nethraops-agent.
+#
+# Debian policy:
+#   `remove`  -> keep /etc/nethraops-agent, /var/lib/nethraops-agent,
+#                /var/log/nethraops-agent AND the system user so an
+#                apt install --reinstall lands cleanly.
+#   `purge`   -> tear everything down: dirs + user + venv.
+
+set -e
+
+USER_NAME=nethraops-agent
+APP_DIR=/opt/nethraops-agent
+ETC_DIR=/etc/nethraops-agent
+DATA_DIR=/var/lib/nethraops-agent
+LOG_DIR=/var/log/nethraops-agent
+SERVICE_NAME=nethraops-agent.service
+
+case "$1" in
+    purge)
+        # Tear down per-host state. The venv lives under /opt and was
+        # created by postinst, not shipped in the .deb, so dpkg won't
+        # remove it on its own.
+        rm -rf "${APP_DIR}"
+        rm -rf "${ETC_DIR}"
+        rm -rf "${DATA_DIR}"
+        rm -rf "${LOG_DIR}"
+        if id -u "${USER_NAME}" >/dev/null 2>&1; then
+            userdel "${USER_NAME}" >/dev/null 2>&1 || true
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+        fi
+        ;;
+
+    remove)
+        # Drop the venv we built on the fly in postinst; everything
+        # else stays so the operator can apt install --reinstall
+        # without losing state.json or agent.env.
+        rm -rf "${APP_DIR}"
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+        fi
+        ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+
+    *)
+        echo "postrm called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

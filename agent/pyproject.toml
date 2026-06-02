@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nethraops-agent"
+version = "0.1.0"
+description = "NethraOps agent — collects host telemetry and pushes to the platform"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "NethraOps" }]
+keywords = ["monitoring", "telemetry", "agent"]
+classifiers = [
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "psutil>=5.9,<7",
+    "httpx>=0.27,<1",
+    "pydantic>=2.5,<3",
+    "pydantic-settings>=2.1,<3",
+    "structlog>=24,<26",
+]
+
+[project.optional-dependencies]
+windows = [
+    "pywin32>=306; sys_platform == 'win32'",
+]
+test = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.23,<1",
+    "respx>=0.21,<1",
+]
+
+[project.scripts]
+nethraops-agent = "nethraops_agent.cli:main"
+# `nethraops-agent-service` is the entry the PowerShell installer wraps
+# in `sc.exe create`. The function exits with `2` on non-Windows hosts.
+nethraops-agent-service = "nethraops_agent.windows.service:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nethraops_agent = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
