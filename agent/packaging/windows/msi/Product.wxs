@@ -184,9 +184,9 @@
         <UIRef Id="WixUI_Minimal" />
         <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
 
-        <Icon Id="NethraOpsIcon.ico" SourceFile="NethraOpsIcon.ico" />
-        <Property Id="ARPPRODUCTICON" Value="NethraOpsIcon.ico" />
-        <Property Id="ARPHELPLINK" Value="https://nethraops.com/monitor" />
-        <Property Id="ARPURLINFOABOUT" Value="https://nethraops.com/monitor" />
+        <!-- Custom product icon deferred until branded assets exist.
+             Windows Installer falls back to the default OS icon. -->
+        <Property Id="ARPHELPLINK" Value="https://github.com/jithendargolada/noc-releases" />
+        <Property Id="ARPURLINFOABOUT" Value="https://github.com/jithendargolada/noc-releases" />
     </Product>
 </Wix>
