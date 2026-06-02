@@ -75,7 +75,7 @@
                         Permanent="yes"
                         Vital="yes"
                         DetectCondition="NETHRAOPS_PYTHON_INSTALLED"
-                        InstallCommand='-NoProfile -ExecutionPolicy Bypass -Command "&amp; { New-Item -ItemType Directory -Force -Path ''[ProgramFiles64Folder]NethraOpsAgent\python'' | Out-Null; Expand-Archive -Force -LiteralPath ''[WixBundleSourceFolder]python-embed.zip'' -DestinationPath ''[ProgramFiles64Folder]NethraOpsAgent\python''; if (-not (Test-Path ''[ProgramFiles64Folder]NethraOpsAgent\python\python.exe'')) { exit 1 } }"'
+                        InstallCommand="-NoProfile -ExecutionPolicy Bypass -Command &quot;&amp; { New-Item -ItemType Directory -Force -Path '[ProgramFiles64Folder]NethraOpsAgent\python' | Out-Null; Expand-Archive -Force -LiteralPath '[WixBundleSourceFolder]python-embed.zip' -DestinationPath '[ProgramFiles64Folder]NethraOpsAgent\python'; if (-not (Test-Path '[ProgramFiles64Folder]NethraOpsAgent\python\python.exe')) { exit 1 } }&quot;"
                         SourceFile="powershell.exe">
 
                 <!--
