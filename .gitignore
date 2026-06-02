@@ -8,6 +8,9 @@ venv/
 build/
 dist/
 _site/
+# Keep the repo landing-page template tracked even though _site/ is excluded.
+!agent/packaging/linux/repos/_site/
+!agent/packaging/linux/repos/_site/index.html
 agent/packaging/linux/deb/dist/
 agent/packaging/linux/rpm/dist/
 agent/packaging/windows/msi/dist/

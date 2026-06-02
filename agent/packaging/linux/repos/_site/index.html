@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NethraOps Agent - Package Repository</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --fg: #1a1d22;
+      --fg-2: #4a5560;
+      --bg: #fbfbfd;
+      --bg-2: #f1f3f6;
+      --accent: #2a64d3;
+      --border: #d4d8de;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fg: #e5e9ef;
+        --fg-2: #9aa3b0;
+        --bg: #0f1216;
+        --bg-2: #1a1f25;
+        --accent: #7fa5f2;
+        --border: #2a3038;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.45;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin: 32px 0 8px; font-size: 18px; }
+    h3 { margin: 16px 0 4px; font-size: 14px; color: var(--fg-2); text-transform: uppercase; letter-spacing: .08em; }
+    p { margin: 4px 0 12px; color: var(--fg-2); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre { font-family: var(--mono); font-size: 13px; }
+    pre {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card a.dl {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 12px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .meta { font-size: 12px; color: var(--fg-2); }
+    .kbd {
+      font-family: var(--mono);
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>NethraOps Agent</h1>
+  <p class="meta">Package repository &middot; version <code>${NETHRAOPS_VERSION}</code></p>
+
+  <h2>Linux (APT)</h2>
+  <p>Debian / Ubuntu / WSL. Imports the signing key under the modern
+  <code>/etc/apt/keyrings/</code> path (<code>apt-key add</code> is deprecated).</p>
+  <pre>sudo mkdir -p /etc/apt/keyrings
+sudo curl -fsSL ./keys/nethraops-repo-pubkey.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/nethraops-monitor.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nethraops-monitor.gpg] \
+$(dirname $(readlink -f .))/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/nethraops-monitor.list
+sudo apt update
+sudo apt install -y nethraops-agent</pre>
+
+  <h2>Linux (DNF / YUM)</h2>
+  <p>RHEL / Rocky / Fedora / Amazon Linux. DNF reads <code>gpgkey=</code>
+  on first install and prompts to import.</p>
+  <pre>sudo tee /etc/yum.repos.d/nethraops-monitor.repo &lt;&lt;'EOF'
+[nethraops-monitor]
+name=NethraOps agent
+baseurl=./yum
+enabled=1
+gpgcheck=1
+gpgkey=./keys/nethraops-repo-pubkey.asc
+repo_gpgcheck=1
+EOF
+sudo dnf install -y nethraops-agent</pre>
+
+  <h2>Windows</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Bootstrapper EXE</h3>
+      <p>Bundles Python 3.11. Use this on fresh hosts without Python.</p>
+      <a class="dl" href="./windows/NethraOpsAgentBootstrap.exe">Download EXE</a>
+    </div>
+    <div class="card">
+      <h3>Bare MSI</h3>
+      <p>For hosts where Python 3.11+ is centrally provisioned.</p>
+      <a class="dl" href="./windows/NethraOpsAgent.msi">Download MSI</a>
+    </div>
+  </div>
+  <pre>NethraOpsAgentBootstrap.exe /quiet ^
+    CLAIM_TOKEN=&lt;YOUR_CLAIM_TOKEN&gt; ^
+    PLATFORM_URL=https://monitor.example.com</pre>
+
+  <h2>Signing key</h2>
+  <p>All packages + repo metadata are signed with the NethraOps
+  agent signing key.</p>
+  <pre>gpg --import ./keys/nethraops-repo-pubkey.asc
+gpg --fingerprint repo-signing</pre>
+  <p><a href="./keys/nethraops-repo-pubkey.asc">Download public signing key (.asc)</a></p>
+
+  <h2>Verify a downloaded package</h2>
+  <pre># DEB:
+gpg --verify nethraops-agent_*.deb.asc nethraops-agent_*.deb
+# RPM:
+rpm --checksig nethraops-agent-*.rpm
+# APT metadata:
+gpg --verify apt/dists/stable/Release.gpg apt/dists/stable/Release</pre>
+
+  <p class="meta" style="margin-top:32px;">
+    NethraOps agent &middot;
+    <a href="https://nethraops.com/monitor">nethraops.com/monitor</a>
+  </p>
+</main>
+</body>
+</html>
