@@ -82,8 +82,11 @@ if ($wix4) {
     # Quote the -d argument so pwsh 7 interpolates $Version reliably -
     # native-arg passing in PS7 can leave bare `=$Var` un-expanded.
     $pvArg = "-dProductVersion=$Version"
-    & candle.exe -nologo $pvArg -out $obj1 (Join-Path $here 'Product.wxs')
-    & candle.exe -nologo $pvArg -out $obj2 (Join-Path $here 'CustomActions.wxs')
+    # candle.exe must also see the extension namespaces (util: / WixUI)
+    # because they are referenced in source - light.exe -ext alone is
+    # not enough; CNDL0200 fires at compile time.
+    & candle.exe -nologo $pvArg -ext WixUtilExtension -ext WixUIExtension -out $obj1 (Join-Path $here 'Product.wxs')
+    & candle.exe -nologo $pvArg -ext WixUtilExtension -ext WixUIExtension -out $obj2 (Join-Path $here 'CustomActions.wxs')
     & light.exe -nologo -ext WixUIExtension -ext WixUtilExtension -out $msiOut $obj1 $obj2
 } else {
     Write-Error 'WiX not found on PATH. Install WiX Toolset 3.11+ or 4.x: https://wixtoolset.org/'
