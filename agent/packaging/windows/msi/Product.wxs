@@ -39,6 +39,7 @@
         <Package InstallerVersion="500"
                  Compressed="yes"
                  InstallScope="perMachine"
+                 Platform="x64"
                  Manufacturer="$(var.Manufacturer)"
                  Description="$(var.ProductName) $(var.ProductVersion)"
                  Keywords="NethraOps,Monitor,Agent,Telemetry" />
